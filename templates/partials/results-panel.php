@@ -51,11 +51,21 @@ use App\Web\View;
             'metric' => Presenter::METRIC_TIME,
         ]) ?>
       </div>
-      <div data-metric-panel="peak_bytes" hidden>
+      <div data-metric-panel="memory_bytes" hidden>
         <?= View::partial('partials/bars', [
             'series' => Presenter::series($modeResults, Presenter::METRIC_MEMORY),
             'metric' => Presenter::METRIC_MEMORY,
         ]) ?>
+        <p class="small muted" style="margin:6px 0 0">
+          <?php if (Presenter::memorySource($modeResults) === 'php-heap'): ?>
+            Пик RSS на этом стенде недоступен, показан <code>memory_get_peak_usage()</code> —
+            он не учитывает память libxml, поэтому цифры занижены.
+            <a href="/methodology#pamyat">Подробнее</a>
+          <?php else: ?>
+            Прирост резидентной памяти процесса (RSS), а не <code>memory_get_peak_usage()</code>:
+            счётчик PHP не видит аллокаций libxml. <a href="/methodology#pamyat">Почему так</a>
+          <?php endif; ?>
+        </p>
       </div>
     </div>
   <?php endforeach; ?>
@@ -71,7 +81,9 @@ use App\Web\View;
             <th class="num">Время (медиана)</th>
             <th class="num">Мин</th>
             <th class="num">Макс</th>
-            <th class="num">Пик памяти</th>
+            <th class="num" title="Прирост резидентной памяти процесса за время замера">Память (RSS)</th>
+            <th class="num" title="Пик RSS процесса целиком, включая ~30 МБ самого интерпретатора">Пик процесса</th>
+            <th class="num" title="memory_get_peak_usage() — не видит аллокаций libxml">Куча PHP</th>
             <th class="num">Прочитано строк</th>
             <th class="num">Непустых ячеек</th>
           </tr>
@@ -84,12 +96,14 @@ use App\Web\View;
               <td><?= View::e($row['label']) ?></td>
               <td class="muted"><?= View::e($mode->title()) ?></td>
               <?php if ($row['value'] === null): ?>
-                <td colspan="6" class="muted"><?= View::e($row['formatted']) ?><?= ($row['error'] ?? '') !== '' ? ' — ' . View::e($row['error']) : '' ?></td>
+                <td colspan="8" class="muted"><?= View::e($row['formatted']) ?><?= ($row['error'] ?? '') !== '' ? ' — ' . View::e($row['error']) : '' ?></td>
               <?php else: ?>
                 <td class="num"><?= Format::ms((float) $raw['time_ms']) ?></td>
                 <td class="num muted"><?= Format::ms((float) $raw['time_min']) ?></td>
                 <td class="num muted"><?= Format::ms((float) $raw['time_max']) ?></td>
-                <td class="num"><?= Format::bytes((int) $raw['peak_bytes']) ?></td>
+                <td class="num"><?= Format::bytes((int) ($raw[Presenter::METRIC_MEMORY] ?? $raw['peak_bytes'] ?? 0)) ?></td>
+                <td class="num muted"><?= ($raw['rss_peak'] ?? null) !== null ? Format::bytes((int) $raw['rss_peak']) : '—' ?></td>
+                <td class="num muted"><?= Format::bytes((int) $raw['peak_bytes']) ?></td>
                 <td class="num muted"><?= Format::number((int) $raw['rows']) ?></td>
                 <td class="num muted"><?= Format::number((int) $raw['cells']) ?></td>
               <?php endif; ?>

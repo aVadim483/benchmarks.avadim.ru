@@ -20,6 +20,8 @@ use App\Storage\ResultStore;
 use App\Support\Config;
 use App\Support\Environment;
 use App\Support\Format;
+use App\Support\Memory;
+use App\Web\Presenter;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -47,7 +49,12 @@ $runner = new ProcessRunner($timeout, (string) Config::get('baseline.memory_limi
 $benchmark = new Benchmark($repeats, $runner);
 
 echo 'PHP для воркеров: ', Environment::phpBinary(), PHP_EOL;
-echo 'Повторов на замер: ', $repeats, PHP_EOL, PHP_EOL;
+echo 'Повторов на замер: ', $repeats, PHP_EOL;
+echo 'Память меряется как: ', Memory::describe(), PHP_EOL;
+if (!Memory::supported()) {
+    fwrite(STDERR, 'Внимание: пик RSS недоступен, память будет занижена для библиотек на libxml.' . PHP_EOL);
+}
+echo PHP_EOL;
 
 $datasets = [];
 $totalStart = hrtime(true);
@@ -71,7 +78,7 @@ foreach ($catalog as $key => $spec) {
             if ($row['status'] === 'ok') {
                 printf("%10s  %10s  %s %s%s",
                     Format::ms((float) $row['time_ms']),
-                    Format::bytes((int) $row['peak_bytes']),
+                    Format::bytes((int) $row[Presenter::METRIC_MEMORY]),
                     Format::number((int) $row['rows']),
                     Format::plural((int) $row['rows'], 'строка', 'строки', 'строк'),
                     PHP_EOL,

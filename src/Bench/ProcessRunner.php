@@ -100,7 +100,12 @@ final class ProcessRunner
 
         $message = trim($stderr) !== '' ? trim($stderr) : trim($stdout);
         if ($message === '') {
-            $message = "Процесс завершился с кодом {$exitCode} без результата";
+            // Молча умерший процесс — почти всегда убитый ОС за расход памяти:
+            // аллокации libxml идут мимо memory_limit, поэтому PHP не успевает
+            // сообщить «Allowed memory size» и никакого stderr не остаётся.
+            $message = "Процесс завершился с кодом {$exitCode} без результата"
+                . ' (вероятно, снят операционной системой за расход памяти —'
+                . ' libxml не подчиняется memory_limit)';
         }
 
         return [

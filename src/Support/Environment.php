@@ -60,6 +60,7 @@ final class Environment
             'Zend Engine'  => zend_version(),
             'ext-zip'      => phpversion('zip') ?: 'нет',
             'libxml'       => LIBXML_DOTTED_VERSION,
+            'Замер памяти' => Memory::describe(),
             'Xdebug'       => extension_loaded('xdebug')
                 ? phpversion('xdebug') . ' (в воркерах выключен)'
                 : 'не установлен',

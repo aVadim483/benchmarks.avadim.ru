@@ -13,7 +13,12 @@ use App\Support\Format;
 final class Presenter
 {
     public const METRIC_TIME = 'time_ms';
-    public const METRIC_MEMORY = 'peak_bytes';
+
+    /**
+     * Прирост RSS процесса за замер. Не peak_bytes: счётчик PHP не видит
+     * аллокаций libxml и занижает расход у библиотек, строящих DOM листа.
+     */
+    public const METRIC_MEMORY = 'memory_bytes';
 
     /**
      * @param array<string, array<string, mixed>> $modeResults [библиотека => замер]
@@ -34,7 +39,9 @@ final class Presenter
         $rows = [];
         foreach ($modeResults as $id => $result) {
             $ok = ($result['status'] ?? '') === 'ok';
-            $value = $ok ? (float) ($result[$metric] ?? 0) : null;
+            // Отчёты, снятые до перехода на RSS, знают только peak_bytes.
+            $raw = $result[$metric] ?? ($metric === self::METRIC_MEMORY ? ($result['peak_bytes'] ?? 0) : 0);
+            $value = $ok ? (float) $raw : null;
 
             $rows[] = [
                 'id'        => $id,
@@ -45,8 +52,8 @@ final class Presenter
                 'value'     => $value,
                 'formatted' => $ok
                     ? ($metric === self::METRIC_TIME
-                        ? Format::ms((float) $result[$metric])
-                        : Format::bytes((int) $result[$metric]))
+                        ? Format::ms((float) $raw)
+                        : Format::bytes((int) $raw))
                     : self::statusLabel((string) ($result['status'] ?? 'error')),
                 'rows'      => $ok ? (int) ($result['rows'] ?? 0) : null,
                 'cells'     => $ok ? (int) ($result['cells'] ?? 0) : null,
@@ -70,7 +77,9 @@ final class Presenter
                 continue;
             }
             $row['ratio'] = $best > 0 ? $row['value'] / $best : 1.0;
-            $row['ratio_label'] = $row['ratio'] < 1.005 ? 'быстрее всех' : Format::ratio($row['ratio']);
+            $row['ratio_label'] = $row['ratio'] < 1.005
+                ? ($metric === self::METRIC_TIME ? 'быстрее всех' : 'экономнее всех')
+                : Format::ratio($row['ratio']);
             $row['percent'] = $worst > 0 ? max(1.5, $row['value'] / $worst * 100) : 0.0;
             $row['best'] = abs($row['value'] - $best) < 1e-9;
         }
@@ -120,6 +129,24 @@ final class Presenter
         }
 
         return ['value' => $subject['value'], 'best' => $subject['best'], 'vs' => $vs];
+    }
+
+    /**
+     * Откуда взята метрика памяти в этой группе замеров: 'rss' либо 'php-heap'.
+     * Разные библиотеки в одном прогоне всегда меряются одинаково, поэтому
+     * достаточно первого успешного результата.
+     *
+     * @param array<string, array<string, mixed>> $modeResults
+     */
+    public static function memorySource(array $modeResults): string
+    {
+        foreach ($modeResults as $result) {
+            if (($result['status'] ?? '') === 'ok') {
+                return (string) ($result['memory_source'] ?? 'php-heap');
+            }
+        }
+
+        return 'php-heap';
     }
 
     public static function statusLabel(string $status): string

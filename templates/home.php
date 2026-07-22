@@ -96,7 +96,7 @@ $highlights = $baseline !== null ? Highlights::build($baseline) : ['headline' =>
           <span>Метрика</span>
           <div class="segmented" data-metric-switch>
             <button type="button" data-metric="time_ms" aria-pressed="true">Время</button>
-            <button type="button" data-metric="peak_bytes" aria-pressed="false">Память</button>
+            <button type="button" data-metric="memory_bytes" aria-pressed="false">Память</button>
           </div>
         </div>
       </div>

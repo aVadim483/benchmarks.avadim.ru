@@ -10,6 +10,7 @@ use App\Storage\ResultStore;
 use App\Support\Config;
 use App\Support\Environment;
 use App\Support\Format;
+use App\Support\Memory;
 use App\Support\RateLimiter;
 use App\Web\BackgroundLauncher;
 use App\Web\UploadException;
@@ -73,9 +74,10 @@ if ($path === '/methodology' && $method === 'GET') {
         'title'     => 'Методика измерений',
         'libraries' => Registry::describe(),
         'settings'  => [
-            'baseline' => (array) Config::get('baseline'),
-            'web'      => (array) Config::get('web'),
-            'ini'      => (array) Config::get('worker.ini'),
+            'baseline'      => (array) Config::get('baseline'),
+            'web'           => (array) Config::get('web'),
+            'ini'           => (array) Config::get('worker.ini'),
+            'memory_metric' => Memory::describe(),
         ],
         'datasets'  => FixtureGenerator::catalog(),
     ]);
@@ -196,11 +198,12 @@ if (preg_match('~^/fixtures/([a-z0-9-]+)\.xlsx$~', $path, $m) === 1 && $method =
 
 if ($path === '/health' && $method === 'GET') {
     $json([
-        'ok'          => true,
-        'proc_open'   => Environment::canSpawnProcesses(),
-        'php_binary'  => Environment::phpBinary(),
-        'baseline'    => $store->loadBaseline() !== null,
-        'libraries'   => array_column(Registry::describe(), 'version', 'id'),
+        'ok'            => true,
+        'proc_open'     => Environment::canSpawnProcesses(),
+        'php_binary'    => Environment::phpBinary(),
+        'memory_metric' => Memory::supported() ? Memory::source() : 'php-heap',
+        'baseline'      => $store->loadBaseline() !== null,
+        'libraries'     => array_column(Registry::describe(), 'version', 'id'),
     ]);
 }
 

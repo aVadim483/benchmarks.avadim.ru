@@ -70,7 +70,7 @@ final class Highlights
             if ($memory['value'] !== null) {
                 $headline[] = [
                     'value' => Format::bytes((int) $memory['value']),
-                    'label' => 'пик памяти на этом же чтении',
+                    'label' => 'памяти процесса (RSS) на этом же чтении',
                 ];
 
                 $heaviest = self::maxRatio($memory['vs']);
@@ -154,7 +154,7 @@ final class Highlights
             $sizes[] = $size;
             foreach ($dataset['results'][Mode::ReadAll->value] ?? [] as $id => $result) {
                 if (($result['status'] ?? '') === 'ok') {
-                    $memoryByAdapter[$id][] = (int) $result['peak_bytes'];
+                    $memoryByAdapter[$id][] = (int) self::memoryOf($result);
                 }
             }
         }
@@ -180,8 +180,10 @@ final class Highlights
                 . '. Такие библиотеки безопасно ставить туда, где размер входного файла заранее неизвестен.';
         }
         if ($growing !== []) {
-            $notes[] = 'Пик памяти растёт вместе с файлом у: ' . implode(', ', $growing)
-                . ' — разница между самым маленьким и самым большим набором.';
+            $notes[] = 'Память процесса растёт вместе с файлом у: ' . implode(', ', $growing)
+                . ' — разница между самым маленьким и самым большим набором. Учтите, что у таких'
+                . ' библиотек значительная часть расхода приходится на libxml, а он не подчиняется'
+                . ' memory_limit: процесс не упадёт с «Allowed memory size», он просто съест ОЗУ.';
         }
 
         // Сравнение shared strings и inline strings
@@ -204,10 +206,10 @@ final class Highlights
                         : 'на ' . round((1 - $ratio) * 100) . '% быстрее');
                 }
 
-                $memoryRatio = (int) $result['peak_bytes'] / max(1, (int) $other['peak_bytes']);
+                $memoryRatio = self::memoryOf($result) / max(1.0, self::memoryOf($other));
                 if ($memoryRatio > 1.5) {
-                    $memoryDiffs[] = $label . ' — ' . Format::bytes((int) $other['peak_bytes'])
-                        . ' против ' . Format::bytes((int) $result['peak_bytes'])
+                    $memoryDiffs[] = $label . ' — ' . Format::bytes((int) self::memoryOf($other))
+                        . ' против ' . Format::bytes((int) self::memoryOf($result))
                         . ' (' . Format::ratio($memoryRatio) . ')';
                 }
             }
@@ -309,7 +311,7 @@ final class Highlights
                         continue;
                     }
                     $ratios[$id]['time'][] = (float) $result['time_ms'] / max(0.001, (float) $subject['time_ms']);
-                    $ratios[$id]['memory'][] = (int) $result['peak_bytes'] / max(1, (int) $subject['peak_bytes']);
+                    $ratios[$id]['memory'][] = self::memoryOf($result) / max(1.0, self::memoryOf($subject));
                 }
             }
         }
@@ -325,16 +327,41 @@ final class Highlights
             $out[] = sprintf(
                 '%s — по времени %s, по памяти %s',
                 $labels[$id] ?? $id,
-                $time >= 1
-                    ? 'медленнее в ' . trim(Format::ratio($time), '×') . ' раза'
-                    : 'быстрее в ' . trim(Format::ratio(1 / $time), '×') . ' раза',
-                $memory >= 1
-                    ? 'тяжелее в ' . trim(Format::ratio($memory), '×') . ' раза'
-                    : 'легче в ' . trim(Format::ratio(1 / $memory), '×') . ' раза',
+                self::times($time, 'медленнее', 'быстрее'),
+                self::times($memory, 'тяжелее', 'легче'),
             );
         }
 
         return $out;
+    }
+
+    /**
+     * Метрика памяти из одного замера. Отчёты, снятые до перехода на RSS,
+     * знают только peak_bytes — читаем их без потери смысла.
+     *
+     * @param array<string, mixed> $result
+     */
+    private static function memoryOf(array $result): float
+    {
+        return (float) ($result[Presenter::METRIC_MEMORY] ?? $result['peak_bytes'] ?? 0);
+    }
+
+    /**
+     * «во столько-то раз больше/меньше». Отношение, равное нулю или единице,
+     * не переворачиваем — иначе получилось бы деление на ноль.
+     */
+    private static function times(float $ratio, string $more, string $less): string
+    {
+        if ($ratio <= 0) {
+            return 'сравнить не удалось';
+        }
+        if (abs($ratio - 1.0) < 0.005) {
+            return 'наравне';
+        }
+
+        return $ratio > 1
+            ? $more . ' в ' . trim(Format::ratio($ratio), '×') . ' раза'
+            : $less . ' в ' . trim(Format::ratio(1 / $ratio), '×') . ' раза';
     }
 
     /** @param list<float> $values */

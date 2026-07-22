@@ -7,7 +7,7 @@ use App\Support\Format;
 use App\Web\View;
 
 /** @var list<array<string, mixed>> $libraries */
-/** @var array{baseline:array<string,mixed>, web:array<string,mixed>, ini:array<string,string>} $settings */
+/** @var array{baseline:array<string,mixed>, web:array<string,mixed>, ini:array<string,string>, memory_metric:string} $settings */
 /** @var array<string, array<string, mixed>> $datasets */
 ?>
 
@@ -22,7 +22,7 @@ use App\Web\View;
 
     <h2>Каждый замер — отдельный процесс PHP</h2>
     <p>
-      <code>memory_get_peak_usage()</code> возвращает пик по процессу целиком. Если мерить несколько
+      И пик кучи PHP, и пик RSS — величины на весь процесс. Если мерить несколько
       библиотек подряд в одном процессе, вторая унаследует пик первой, а её классы уже будут
       загружены автолоадером — то есть она получит незаслуженную фору. Поэтому каждая пара
       «библиотека + сценарий» запускается в новом процессе через <code>bin/worker.php</code>,
@@ -31,9 +31,60 @@ use App\Web\View;
     <p>
       Внутри воркера порядок действий одинаков для всех: прогрев файла чтением с диска
       (чтобы первый замер не платил за холодный кэш ОС), <code>gc_collect_cycles()</code>,
-      <code>memory_reset_peak_usage()</code>, затем <code>hrtime()</code> вокруг вызова адаптера.
+      <code>memory_reset_peak_usage()</code>, снятие базового уровня RSS, затем
+      <code>hrtime()</code> вокруг вызова адаптера.
       В измеряемое время попадает и подгрузка классов самой библиотеки — это честно, в реальном
       приложении за неё тоже платят.
+    </p>
+
+    <h2 id="pamyat">Память меряется по RSS, а не по счётчику PHP</h2>
+    <p>
+      Это самое важное отличие от большинства PHP-бенчмарков, и без него сравнение получается
+      неверным. <code>memory_get_peak_usage()</code> считает только то, что выделено через
+      внутренний аллокатор PHP (<code>emalloc</code>). Но libxml — а значит
+      <code>SimpleXMLElement</code>, <code>DOMDocument</code> и <code>XMLReader::expand()</code> —
+      работает своим <code>malloc</code>'ом. Мимо счётчика и мимо <code>memory_limit</code>.
+    </p>
+    <p>
+      Насколько велика разница, видно на контрольном замере: лист на 12 МБ XML,
+      три состояния одного и того же процесса.
+    </p>
+    <div class="table-scroll">
+      <table class="data">
+        <thead><tr><th>Состояние процесса</th><th class="num">memory_get_peak_usage()</th><th class="num">RSS процесса</th></tr></thead>
+        <tbody>
+          <tr><td>пустой PHP</td><td class="num">0,4 МБ</td><td class="num">28 МБ</td></tr>
+          <tr><td>XML прочитан в строку</td><td class="num">14,4 МБ</td><td class="num">40 МБ</td></tr>
+          <tr><td>+ <code>simplexml_load_string()</code> этой строки</td><td class="num">14,4 МБ</td><td class="num">354 МБ</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Счётчик PHP не сдвинулся ни на байт, а процесс вырос на 313 МБ. Библиотека, которая держит
+      лист в DOM, по этому счётчику выглядит в разы легче, чем она есть — и в таблице результатов
+      незаслуженно обходит потоковые. Поэтому основная метрика здесь — <b>прирост резидентной
+      памяти процесса (RSS)</b> за время замера: пик RSS после вычета базового уровня, набранного
+      интерпретатором, автолоадером и прогревом файла (около 30 МБ, одинаково для всех библиотек).
+      Пик по процессу целиком и старый счётчик кучи остались в подробной таблице — расхождение
+      между колонками и есть цена DOM.
+    </p>
+    <p>
+      Источник цифры зависит от платформы: на Linux это <code>VmHWM</code> из
+      <code>/proc/self/status</code>, иначе — <code>getrusage()['ru_maxrss']</code>. На этом стенде:
+      <code><?= View::e($settings['memory_metric'] ?? 'неизвестно') ?></code>.
+      Если платформа пик RSS не отдаёт, бенчмарк откатывается на <code>memory_get_peak_usage()</code>
+      и пишет об этом прямо под графиком — молча занижать цифры он не будет.
+    </p>
+    <p class="muted">
+      Из того же факта следует практическое: <code>memory_limit</code> не защищает от библиотеки,
+      которая строит DOM листа. Процесс не упадёт с «Allowed memory size» — он просто съест
+      оперативную память сервера и попадёт под OOM-killer. Такой результат в отчёте выглядит как
+      «процесс упал», а не «не хватило памяти».
+    </p>
+    <p class="muted">
+      Чего RSS не покрывает: OpenSpout выносит словарь <code>sharedStrings</code> во временные файлы
+      на диск. По памяти он от этого выигрывает по-настоящему, но часть нагрузки переезжает на диск,
+      и в колонке памяти этого не видно.
     </p>
 
     <h2>Xdebug и OPcache выключены</h2>

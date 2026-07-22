@@ -12,7 +12,7 @@ use App\Web\View;
 
 $metrics = [
     Presenter::METRIC_TIME   => 'Время чтения всех строк, медиана',
-    Presenter::METRIC_MEMORY => 'Пик памяти при чтении всех строк',
+    Presenter::METRIC_MEMORY => 'Прирост памяти процесса (RSS) при чтении всех строк',
 ];
 ?>
 <?php foreach ($metrics as $metric => $caption): ?>

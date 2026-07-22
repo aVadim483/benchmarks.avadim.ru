@@ -97,20 +97,50 @@ final class Benchmark
         $last = $samples[\count($samples) - 1];
         $peaks = array_map(static fn (array $s): int => (int) $s['peak_bytes'], $samples);
 
+        // Память берётся по худшему повтору, а не по медиане: пик — это граница,
+        // за которую процесс не выходил, и занижать её усреднением нельзя.
+        $rssPeaks = self::ints(array_column($samples, 'rss_peak'));
+        $rssDeltas = self::ints(array_column($samples, 'rss_delta'));
+        $rssAvailable = $rssPeaks !== [] && $rssDeltas !== [];
+
         return [
             'status'      => 'ok',
             'time_ms'     => self::median($times),
             'time_min'    => $times[0],
             'time_max'    => $times[\count($times) - 1],
             'samples'     => array_map(static fn (float $t): float => round($t, 2), $times),
-            'peak_bytes'  => max($peaks),
-            'peak_delta'  => (int) $last['peak_delta'],
-            'peak_real'   => (int) $last['peak_real'],
-            'baseline'    => (int) $last['baseline'],
-            'rows'        => (int) $last['rows'],
-            'cells'       => (int) $last['cells'],
-            'bytes'       => (int) $last['bytes'],
+            // Основная метрика памяти: прирост RSS процесса за время замера.
+            // Если платформа пик RSS не отдаёт — откатываемся на счётчик PHP,
+            // и memory_source честно об этом говорит.
+            'memory_bytes'  => $rssAvailable ? max($rssDeltas) : max($peaks),
+            'memory_source' => $rssAvailable ? 'rss' : 'php-heap',
+            'rss_peak'      => $rssAvailable ? max($rssPeaks) : null,
+            'rss_delta'     => $rssAvailable ? max($rssDeltas) : null,
+            'rss_baseline'  => isset($last['rss_baseline']) ? (int) $last['rss_baseline'] : null,
+            'peak_bytes'    => max($peaks),
+            'peak_delta'    => (int) $last['peak_delta'],
+            'peak_real'     => (int) $last['peak_real'],
+            'baseline'      => (int) $last['baseline'],
+            'rows'          => (int) $last['rows'],
+            'cells'         => (int) $last['cells'],
+            'bytes'         => (int) $last['bytes'],
         ];
+    }
+
+    /**
+     * @param  list<mixed> $values
+     * @return list<int>
+     */
+    private static function ints(array $values): array
+    {
+        $out = [];
+        foreach ($values as $value) {
+            if (is_int($value) && $value >= 0) {
+                $out[] = $value;
+            }
+        }
+
+        return $out;
     }
 
     /** @param list<float> $sorted */
