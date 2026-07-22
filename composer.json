@@ -9,7 +9,7 @@
         "ext-zip": "*",
         "ext-xmlreader": "*",
         "ext-mbstring": "*",
-        "avadim/fast-excel-reader": "^3.0",
+        "avadim/fast-excel-reader": "^4.0",
         "avadim/fast-excel-writer": "^6.0",
         "phpoffice/phpspreadsheet": "^5.0",
         "openspout/openspout": "^5.0",
