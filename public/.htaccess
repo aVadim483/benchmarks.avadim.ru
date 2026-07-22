@@ -1,0 +1,21 @@
+# Все запросы, кроме существующих файлов, обрабатывает фронт-контроллер.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# Только для mod_php: с PHP-FPM директивы php_value в .htaccess вызывают 500,
+# там лимиты задаются в пуле FPM.
+<IfModule mod_php.c>
+    php_value upload_max_filesize 30M
+    php_value post_max_size 32M
+</IfModule>

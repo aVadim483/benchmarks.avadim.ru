@@ -1,0 +1,19 @@
+/vendor/
+
+# Всё содержимое data/ создаётся на конкретной машине: тестовые файлы,
+# загрузки пользователей, результаты прогонов. Структура каталогов при этом
+# нужна в репозитории — её держат .gitkeep.
+/data/*
+!/data/fixtures/
+!/data/uploads/
+!/data/results/
+!/data/tmp/
+/data/*/*
+!/data/*/.gitkeep
+
+# Локальные переопределения путей и лимитов (php_binary и прочее)
+/config/config.local.php
+
+.idea/
+.vscode/
+*.bak
