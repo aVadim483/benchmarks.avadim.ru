@@ -110,6 +110,30 @@ return ['php_binary' => '/usr/bin/php8.4'];
 0 * * * * php /var/www/fast-excel-benchmark/bin/purge.php
 ```
 
+### Обновление боевого сервера
+
+Рабочий каталог сайта — обычный клон репозитория, поэтому обновление сводится к:
+
+```bash
+cd /var/www/avadim/data/www/benchmarks.avadim.ru
+git pull
+/opt/php84/bin/php /usr/local/bin/composer install --no-dev --optimize-autoloader
+```
+
+Всё, что специфично для машины, лежит вне репозитория и `git pull` его не трогает:
+`config/config.local.php` (путь к CLI-бинарнику PHP), `data/fixtures/*.xlsx`,
+`data/results/baseline.json`, `data/uploads/`, `vendor/`.
+
+Перегенерировать эталонные результаты после изменения адаптеров или наборов данных:
+
+```bash
+/opt/php84/bin/php bin/generate-fixtures.php --force
+/opt/php84/bin/php bin/benchmark.php --repeats=5
+```
+
+Прогон занимает несколько минут и переписывает `data/results/baseline.json` — до его
+завершения сайт продолжает показывать предыдущие цифры.
+
 ## Ограничения загрузок
 
 Задаются в `config/config.php` (секция `web`): размер файла, допустимые расширения, таймаут на
